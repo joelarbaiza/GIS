@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mapbox Coordinates</title>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js"></script>
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      #map {
+        height: 500px;
+        width: 100%;
+      }
+      #search {
+        margin: 10px;
+        width: 400px;
+      }
+      .suggestions {
+        position: absolute;
+        background-color: white;
+        border: 1px solid #ccc;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .suggestions a {
+        display: block;
+        padding: 5px;
+        cursor: pointer;
+      }
+      .suggestions a:hover {
+        background-color: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mapbox Coordinates</h1>
+    <input
+      id="search"
+      class="controls"
+      type="text"
+      placeholder="Buscar ubicación"
+    />
+    <div id="suggestions" class="suggestions"></div>
+    <div id="map"></div>
+    <input type="text" name="p1" placeholder="Punto 1" required id="p1" />
+    <input type="text" name="p2" placeholder="Punto 2" required id="p2" />
+    <input type="text" name="p3" placeholder="Punto 3" required id="p3" />
+    <input type="text" name="p4" placeholder="Punto 4" required id="p4" />
+    <button id="reset-button">Resetear</button>
+
+    <script>
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoicG9saTIzIiwiYSI6ImNsd3Y4bzU3YzBscnMybHBuc3M3MTloYmcifQ.kybErNGB0mMGl9T011KENw";
+
+      document.addEventListener("DOMContentLoaded", function () {
+        var lat = -6.7714; // Latitud de Chiclayo
+        var lng = -79.8409; // Longitud de Chiclayo
+
+        var map = new mapboxgl.Map({
+          container: "map",
+          style: "mapbox://styles/mapbox/streets-v11",
+          center: [lng, lat],
+          zoom: 13,
+        });
+
+        var marker = new mapboxgl.Marker().setLngLat([lng, lat]).addTo(map);
+
+        var inputs = ["p1", "p2", "p3", "p4"];
+        var inputIndex = 0;
+
+        map.on("click", function (e) {
+          if (inputIndex < inputs.length) {
+            var coords = e.lngLat;
+            var lat = coords.lat;
+            var lng = coords.lng;
+            var coordString = lat + "," + lng;
+
+            document.getElementById(inputs[inputIndex]).value = coordString;
+            marker.setLngLat([lng, lat]).addTo(map);
+
+            getLocationDetails(lat, lng);
+            inputIndex++;
+          }
+        });
+
+        var geolocate = new mapboxgl.GeolocateControl({
+          positionOptions: {
+            enableHighAccuracy: true,
+          },
+          trackUserLocation: true,
+        });
+
+        map.addControl(geolocate);
+
+        geolocate.on("geolocate", function (e) {
+          var lat = e.coords.latitude;
+          var lng = e.coords.longitude;
+
+          var coordString = lat + "," + lng;
+          if (inputIndex < inputs.length) {
+            document.getElementById(inputs[inputIndex]).value = coordString;
+            inputIndex++;
+          }
+
+          map.flyTo({
+            center: [lng, lat],
+            zoom: 15,
+          });
+
+          marker.setLngLat([lng, lat]).addTo(map);
+          getLocationDetails(lat, lng);
+        });
+
+        var searchInput = document.getElementById("search");
+        var suggestionsList = document.getElementById("suggestions");
+
+        searchInput.addEventListener("input", function (e) {
+          var query = e.target.value;
+
+          suggestionsList.innerHTML = "";
+
+          if (query.length < 3) {
+            suggestionsList.classList.remove("show");
+            return;
+          }
+
+          fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${mapboxgl.accessToken}`
+          )
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.features.length > 0) {
+                suggestionsList.classList.add("show");
+              } else {
+                suggestionsList.classList.remove("show");
+              }
+
+              data.features.forEach((feature) => {
+                var suggestionItem = document.createElement("a");
+                suggestionItem.classList.add("dropdown-item");
+                suggestionItem.textContent = feature.place_name;
+                suggestionItem.onclick = function () {
+                  var lngLat = feature.center;
+                  var lng = lngLat[0];
+                  var lat = lngLat[1];
+                  var coordString = lat + "," + lng;
+
+                  map.flyTo({
+                    center: [lng, lat],
+                    zoom: 15,
+                  });
+
+                  if (inputIndex < inputs.length) {
+                    document.getElementById(inputs[inputIndex]).value =
+                      coordString;
+                    inputIndex++;
+                  }
+
+                  marker.setLngLat([lng, lat]).addTo(map);
+                  getLocationDetails(lat, lng);
+
+                  suggestionsList.innerHTML = "";
+                  suggestionsList.classList.remove("show");
+                };
+                suggestionsList.appendChild(suggestionItem);
+              });
+            })
+            .catch((error) => {
+              console.error("Error al buscar sugerencias:", error);
+            });
+        });
+
+        document
+          .getElementById("reset-button")
+          .addEventListener("click", function () {
+            inputs.forEach(function (inputId) {
+              document.getElementById(inputId).value = "";
+            });
+            inputIndex = 0;
+            marker.setLngLat([lng, lat]).addTo(map); // Optional: Reset marker to initial position
+          });
+
+        function getLocationDetails(lat, lng) {
+          console.log(`Latitud: ${lat}, Longitud: ${lng}`);
+        }
+      });
+    </script>
+  </body>
+</html>
